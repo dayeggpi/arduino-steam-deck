@@ -13,7 +13,7 @@ Grove_LED_Bar bar(15, 14, 1);  // Clock pin, Data pin, Orientation
 
 #define EEPROM_MAGIC 0x42
 #define EEPROM_BASE  1
-#define PAGES        4
+#define PAGES        10 // ADJUST PAGES
 #define BUTTONS      4
 
 struct KeyCommand {
@@ -23,14 +23,6 @@ struct KeyCommand {
 };
 
 KeyCommand bindings[PAGES][BUTTONS];
-
-// Defaults match original hardcoded values — used when EEPROM is blank
-const KeyCommand defaults[PAGES][BUTTONS] = {
-  { {0, 0, KEY_F21}, {0, 0, KEY_F22}, {0, 0, KEY_F23}, {0, 0, KEY_F24} },
-  { {0, 0, KEY_F20}, {KEY_LEFT_CTRL, KEY_LEFT_ALT, 'd'}, {KEY_LEFT_CTRL, KEY_LEFT_ALT, 's'}, {KEY_LEFT_CTRL, KEY_LEFT_SHIFT, 'k'} },
-  { {0, 0, KEY_F16}, {0, 0, KEY_F17}, {0, 0, KEY_F18}, {0, 0, KEY_F19} },
-  { {KEY_LEFT_CTRL, 0, KEY_F12}, {0, 0, KEY_F13}, {0, 0, KEY_F14}, {0, 0, KEY_F15} }
-};
 
 int pageFlag  = 1;
 bool configMode = false;
@@ -60,9 +52,7 @@ void saveToEEPROM() {
 
 void loadFromEEPROM() {
   if (EEPROM.read(0) != EEPROM_MAGIC) {
-    for (int p = 0; p < PAGES; p++)
-      for (int b = 0; b < BUTTONS; b++)
-        bindings[p][b] = defaults[p][b];
+    memset(bindings, 0, sizeof(bindings));
     saveToEEPROM();
     return;
   }
@@ -111,9 +101,7 @@ void handleSerial() {
     }
 
   } else if (line == "CFG_RESET") {
-    for (int p = 0; p < PAGES; p++)
-      for (int b = 0; b < BUTTONS; b++)
-        bindings[p][b] = defaults[p][b];
+    memset(bindings, 0, sizeof(bindings));
     saveToEEPROM();
     configMode = false;
     Serial.println("RESET");
@@ -121,16 +109,17 @@ void handleSerial() {
   } else if (line == "CFG_DUMP") {
     dumpConfig();
 
-  } else if (configMode && line.length() > 4 && line[0] == 'P') {
+  } else if (configMode && line[0] == 'P') {
     // Format: "P<page>B<btn> <mod1> <mod2> <key>"  (1-indexed, values 0-255)
-    int page = line[1] - '1';
-    int btn  = line[3] - '1';
+    int bPos = line.indexOf('B');
+    int sp1  = line.indexOf(' ');
+    if (bPos < 0 || sp1 < 0 || bPos >= sp1) { Serial.println("ERR_FMT"); return; }
+    int page = line.substring(1, bPos).toInt() - 1;
+    int btn  = line.substring(bPos + 1, sp1).toInt() - 1;
 
     if (page < 0 || page >= PAGES || btn < 0 || btn >= BUTTONS) {
       Serial.println("ERR_RANGE"); return;
     }
-
-    int sp1 = line.indexOf(' ');
     if (sp1 < 0) { Serial.println("ERR_FMT"); return; }
     String vals = line.substring(sp1 + 1);
 
@@ -198,7 +187,7 @@ void loop() {
     executeCommand(bindings[pageFlag - 1][3]);
 
   if (pressedPin6 != lastState6 && pressedPin6 == LOW) {
-    pageFlag = (pageFlag % 4) + 1;
+    pageFlag = (pageFlag % 10) + 1; // ADJUST PAGES
     bar.setLevel(pageFlag);
   }
 
